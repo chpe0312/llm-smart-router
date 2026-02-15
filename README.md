@@ -6,44 +6,45 @@ An intelligent, OpenAI-compatible proxy that sits in front of a [LiteLLM](https:
 
 ```
 Client / Open WebUI
-        │
-        ▼
-┌─────────────────────────────────┐
-│       Smart Router (:8000)      │
-│                                 │
-│  1. Receive request             │
-│  2. Score complexity            │
-│     ├─ Heuristics (fast)        │
-│     └─ LLM Classifier (fallback)│
-│  3. Select tier: S / M / L      │
-│  4. Pick best model in tier     │
-│  5. Forward to LiteLLM          │
-└─────────────┬───────────────────┘
-              │
-              ▼
-┌─────────────────────────────────┐
-│       LiteLLM Backend           │
-│  (manages model providers)      │
-└─────────────────────────────────┘
+        |
+        v
++----------------------------------+
+|       Smart Router (:8000)       |
+|                                  |
+|  1. Receive request              |
+|  2. Score complexity             |
+|     +-- Heuristics (fast)        |
+|     +-- LLM Classifier (fallback)|
+|  3. Select tier: S / M / L       |
+|  4. Pick best model in tier      |
+|  5. Forward to LiteLLM           |
++----------------+-----------------+
+                 |
+                 v
++----------------------------------+
+|       LiteLLM Backend            |
+|  (manages model providers)       |
++----------------------------------+
 ```
 
 The router analyzes each incoming request and assigns it to one of three complexity tiers:
 
 | Tier | Parameter Range | Use Case | Example Models |
 |------|----------------|----------|----------------|
-| **SMALL** | ≤ 8B (active) | Simple questions, translations, formatting | qwen-3-4b, gemma-3-4b |
-| **MEDIUM** | ≤ 27B | Standard coding, analysis, summarization | gemma-3-27b, Mistral-Small-3.2-24B |
+| **SMALL** | <= 8B | Simple questions, translations, formatting | qwen-3-4b, gemma-3-4b |
+| **MEDIUM** | <= 27B | Standard coding, analysis, summarization | gemma-3-27b, Mistral-Small-3.2-24B |
 | **LARGE** | > 27B | Complex reasoning, architecture design, multi-step tasks | qwen2.5-coder-32b, Qwen3-Coder-30B |
 
 ## Features
 
 - **OpenAI-compatible API** — Drop-in replacement, clients just change the URL
 - **Hybrid complexity analysis** — Fast rule-based heuristics with LLM classifier fallback for uncertain cases
+- **Multilingual keyword detection** — Heuristic keywords work in English and German
 - **Automatic model discovery** — Queries LiteLLM `/v1/models` and categorizes models by parameter count
-- **MoE-aware** — Extracts both total and active parameters from MoE model names, uses total parameters for tier assignment (e.g. `Qwen3-30B-A3B` → 30B total → Tier LARGE)
+- **MoE-aware** — Extracts both total and active parameters from MoE model names, uses total parameters for tier assignment (e.g. `Qwen3-30B-A3B` -> 30B total -> Tier LARGE)
 - **Coder model preference** — Detects code-related requests and prefers specialized coder models
 - **Streaming support** — Passes through SSE streaming responses
-- **Configurable model selection** — YAML config for allowlist/blocklist and tier overrides
+- **Centralized YAML config** — All settings (connection, routing, model selection) in a single `router_config.yaml`
 - **Hot reload** — Change config without restarting via `POST /admin/reload`
 - **Open WebUI integration** — Appears as a single virtual model in the UI
 
@@ -54,13 +55,12 @@ The router analyzes each incoming request and assigns it to one of three complex
 ```bash
 # Clone and configure
 git clone <repo-url> && cd llm-smart-router
-cp .env.example .env
-# Edit .env with your LiteLLM URL and API key
+cp router_config.example.yaml router_config.yaml
+# Edit router_config.yaml with your LiteLLM URL and API key
 
-# Start
+# Build and start
 podman build -t llm-smart-router .
 podman run -d --name smart-router \
-  --env-file .env \
   -v ./router_config.yaml:/app/router_config.yaml:Z,ro \
   -p 8000:8000 \
   llm-smart-router
@@ -76,49 +76,72 @@ uvicorn smart_router.main:app --reload
 
 ## Configuration
 
-### Environment Variables (`.env`)
+All settings are centralized in a single file: `router_config.yaml`. Copy the example to get started:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LITELLM_BASE_URL` | `http://localhost:4000/v1` | LiteLLM API base URL |
-| `LITELLM_API_KEY` | — | API key for LiteLLM |
-| `ROUTER_PORT` | `8000` | Port the router listens on |
-| `LOG_LEVEL` | `info` | Logging level (debug, info, warning, error) |
-| `TIER1_MAX_PARAMS` | `8.0` | Max total params (B) for SMALL tier |
-| `TIER2_MAX_PARAMS` | `27.0` | Max total params (B) for MEDIUM tier |
-| `HEURISTIC_LOW_THRESHOLD` | `0.3` | Score below this → SMALL tier |
-| `HEURISTIC_HIGH_THRESHOLD` | `0.7` | Score above this → LARGE tier |
-| `CLASSIFIER_MODEL` | (auto) | Model for classification; auto-selects smallest if empty |
-| `MODEL_CACHE_TTL` | `300` | Seconds between model list refreshes |
+```bash
+cp router_config.example.yaml router_config.yaml
+```
 
-### Model Configuration (`router_config.yaml`)
+The config file has four sections:
 
-Controls which models are used and how they're categorized:
+### Connection
 
 ```yaml
-# Name shown in Open WebUI and other clients
-model_name: "smart-router"
+connection:
+  litellm_base_url: "http://localhost:4000/v1"
+  litellm_api_key: "sk-your-key-here"
+```
 
+### Server
+
+```yaml
+server:
+  port: 8000
+  log_level: "info"               # debug, info, warning, error
+  model_name: "smart-router"      # Name shown in Open WebUI and /v1/models
+```
+
+### Routing
+
+```yaml
+routing:
+  tier_boundaries:
+    small_max: 8.0                # <= 8B  -> SMALL
+    medium_max: 27.0              # <= 27B -> MEDIUM
+                                  # > 27B  -> LARGE
+  heuristic_low_threshold: 0.3    # Score <= this -> SMALL (confident)
+  heuristic_high_threshold: 0.7   # Score >= this -> LARGE (confident)
+  classifier_model: ""            # Empty = auto-select smallest model
+  model_cache_ttl: 300            # Seconds between model list refreshes
+```
+
+### Model Selection
+
+```yaml
 # "allowlist" = only listed models; "blocklist" = all except listed
 filter_mode: allowlist
 
-# Models to include (allowlist mode)
+# Option 1: Manually grouped by tier (recommended)
 models:
-  - qwen-3-4b
-  - gemma-3-4b
-  - qwen2.5-coder-7b
-  - gemma-3-27b
-  - Mistral-Small-3.2-24B
-  - qwen2.5-coder-32b
-  - Qwen3-Coder-30B
+  small:
+    - qwen-3-4b
+    - gemma-3-4b
+  medium:
+    - gemma-3-27b
+    - Mistral-Small-3.2-24B
+  large:
+    - qwen2.5-coder-32b
+    - Qwen3-Coder-30B
 
-# Models to exclude (blocklist mode)
+# Option 2: Flat list (tier determined automatically by parameter count)
+# models:
+#   - qwen-3-4b
+#   - gemma-3-27b
+#   - qwen2.5-coder-32b
+
+# Models to exclude (only in blocklist mode)
 # excluded:
 #   - granite-vision-3.3-2b
-
-# Override automatic tier assignments
-# tier_overrides:
-#   gpt-oss20b: large
 ```
 
 Changes are picked up automatically every 5 minutes, or immediately via:
@@ -126,6 +149,8 @@ Changes are picked up automatically every 5 minutes, or immediately via:
 ```bash
 curl -X POST http://localhost:8000/admin/reload
 ```
+
+The config file path can be overridden with the `CONFIG_PATH` environment variable.
 
 ## API Endpoints
 
@@ -176,16 +201,18 @@ The heuristic scorer evaluates requests on multiple dimensions:
 
 | Signal | Impact | Example |
 |--------|--------|---------|
-| **Token count** | 0.0 – 0.5 | Short questions score low, long conversations score high |
-| **Conversation depth** | 0.0 – 0.15 | 10+ turns adds significant complexity |
-| **Tool/function calls** | 0.1 – 0.2 | More tools = more complex orchestration |
-| **System prompt length** | 0.0 – 0.15 | Long system prompts suggest complex tasks |
-| **Code blocks** | 0.05 – 0.15 | Multiple code blocks indicate involved tasks |
+| **Token count** | 0.0 - 0.5 | Short questions score low, long conversations score high |
+| **Conversation depth** | 0.0 - 0.15 | 10+ turns adds significant complexity |
+| **Tool/function calls** | 0.1 - 0.2 | More tools = more complex orchestration |
+| **System prompt length** | 0.0 - 0.15 | Long system prompts suggest complex tasks |
+| **Code blocks** | 0.05 - 0.15 | Multiple code blocks indicate involved tasks |
 | **Image content** | 0.1 | Multimodal requests need capable models |
-| **Complex keywords** | 0.3 – 0.6 | "analyze", "step-by-step", "trade-offs", "implement" |
-| **Simple keywords** | -0.15 | "translate", "what is", "yes or no" |
+| **Complex keywords** | 0.3 - 0.6 | "analyze", "step-by-step", "trade-offs", "analysiere", "Schritt fur Schritt" |
+| **Simple keywords** | -0.15 | "translate", "what is", "ubersetze", "was ist" |
 
-When the heuristic score falls in the uncertain range (0.3–0.7), the router automatically queries the smallest available model to classify the request's complexity.
+Keywords are matched in both English and German.
+
+When the heuristic score falls in the uncertain range (0.3-0.7), the router automatically queries the smallest available model to classify the request's complexity.
 
 ## Open WebUI Integration
 
@@ -198,7 +225,6 @@ podman network create smartrouter-net
 # Start Smart Router
 podman run -d --name smart-router \
   --network smartrouter-net \
-  --env-file .env \
   -v ./router_config.yaml:/app/router_config.yaml:Z,ro \
   -p 8000:8000 \
   llm-smart-router
@@ -233,13 +259,13 @@ pytest tests/test_router.py::TestRouteRequest::test_simple_request_routes_to_sma
 
 ```
 src/smart_router/
-├── config.py        # Settings (.env) + RouterConfig (router_config.yaml)
-├── models.py        # Model discovery, parameter extraction, tier assignment
-├── heuristics.py    # Rule-based complexity scoring
-├── classifier.py    # LLM-based classification fallback
-├── router.py        # Orchestrates heuristics → classifier → model selection
-├── proxy.py         # Forwards requests to LiteLLM (sync + streaming)
-└── main.py          # FastAPI application and endpoints
++-- config.py        # Central YAML config loader (router_config.yaml)
++-- models.py        # Model discovery, parameter extraction, tier assignment
++-- heuristics.py    # Rule-based complexity scoring (EN + DE keywords)
++-- classifier.py    # LLM-based classification fallback
++-- router.py        # Orchestrates heuristics -> classifier -> model selection
++-- proxy.py         # Forwards requests to LiteLLM (sync + streaming)
++-- main.py          # FastAPI application and endpoints
 ```
 
 ## License

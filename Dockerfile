@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY pyproject.toml .
 COPY src/ src/
-COPY router_config.yaml .
 
 RUN pip install --no-cache-dir .
 
