@@ -5,4 +5,8 @@ __pycache__
 *.egg-info
 .git
 .env
+CLAUDE.md
+.claude
+router_config.yaml
+api.txt
 tests
