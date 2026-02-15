@@ -207,12 +207,13 @@ The heuristic scorer evaluates requests on multiple dimensions:
 | **System prompt length** | 0.0 - 0.15 | Long system prompts suggest complex tasks |
 | **Code blocks** | 0.05 - 0.15 | Multiple code blocks indicate involved tasks |
 | **Image content** | 0.1 | Multimodal requests need capable models |
-| **Complex keywords** | 0.3 - 0.6 | "analyze", "step-by-step", "trade-offs", "analysiere", "Schritt fur Schritt" |
-| **Simple keywords** | -0.15 | "translate", "what is", "ubersetze", "was ist" |
+| **Moderate keywords** | 0.1 - 0.2 | "analyse", "compare", "trade-offs", "analysiere", "vergleiche" |
+| **Complex keywords** | 0.35 - 0.7 | "step-by-step", "implement", "comprehensive", "Schritt für Schritt", "umfassend" |
+| **Simple keywords** | -0.15 | "translate", "what is", "übersetze", "was ist" (only applied when no complex/moderate keywords) |
 
 Keywords are matched in both English and German.
 
-When the heuristic score falls in the uncertain range (0.3-0.7), the router automatically queries the smallest available model to classify the request's complexity.
+When the heuristic score falls in a transition zone (0.2–0.4 or 0.6–0.8), the router automatically queries the smallest available model to classify the request's complexity. Scores clearly within a tier's range are decided by heuristics alone.
 
 ## Open WebUI Integration
 
