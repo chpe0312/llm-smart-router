@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Permit",
+      "Bash(curl -s -H \"Authorization: Bearer sk-REDACTED\" \"https://api.apps.ai01.topcontainer.net/v1/models\")",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(sudo dnf install:*)",
+      "Bash(podman:*)",
+      "Bash(podman-compose:*)",
+      "Bash(curl:*)",
+      "Bash(sudo firewall-cmd:*)",
+      "Bash(gh auth status:*)",
+      "Bash(~/.local/bin/gh auth status:*)",
+      "Bash(~/.local/bin/gh auth login:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(~/.local/bin/gh api:*)",
+      "Bash(git config:*)"
+    ]
+  }
+}

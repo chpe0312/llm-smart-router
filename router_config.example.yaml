@@ -1,0 +1,99 @@
+# =============================================================================
+# Smart Router — Zentrale Konfiguration
+# =============================================================================
+# Alle Einstellungen werden aus dieser Datei geladen.
+# Änderungen werden beim nächsten Model-Refresh (alle model_cache_ttl Sekunden)
+# automatisch übernommen, oder sofort via: POST /admin/reload
+
+# -----------------------------------------------------------------------------
+# Verbindung zum LiteLLM Backend
+# -----------------------------------------------------------------------------
+connection:
+  # Basis-URL der LiteLLM API (inkl. /v1)
+  litellm_base_url: "http://localhost:4000/v1"
+
+  # API-Key für LiteLLM
+  litellm_api_key: "sk-your-key-here"
+
+# -----------------------------------------------------------------------------
+# Server-Einstellungen
+# -----------------------------------------------------------------------------
+server:
+  # Port auf dem der Router lauscht
+  port: 8000
+
+  # Log-Level: debug, info, warning, error
+  log_level: "info"
+
+  # Modellname der in Open WebUI und via /v1/models angezeigt wird
+  model_name: "smart-router"
+
+# -----------------------------------------------------------------------------
+# Routing-Verhalten
+# -----------------------------------------------------------------------------
+routing:
+  # Tier-Grenzen (Milliarden Parameter)
+  # Modelle werden anhand ihrer Gesamtparameter einem Tier zugeordnet,
+  # sofern sie nicht manuell unter models: nach Tier gruppiert sind.
+  tier_boundaries:
+    small_max: 8.0     # <= 8B  → SMALL
+    medium_max: 27.0   # <= 27B → MEDIUM
+                        # > 27B → LARGE
+
+  # Heuristik-Schwellwerte für die Komplexitätsbewertung (0.0 - 1.0)
+  # Score <= low  → SMALL (confident)
+  # Score >= high → LARGE (confident)
+  # Dazwischen    → Classifier-Modell wird befragt
+  heuristic_low_threshold: 0.3
+  heuristic_high_threshold: 0.7
+
+  # Welches Modell für die Klassifikation bei unsicherer Heuristik verwenden
+  # Leer lassen = automatisch das kleinste verfügbare Modell
+  classifier_model: ""
+
+  # Wie oft die Modell-Liste von LiteLLM neu abgefragt wird (Sekunden)
+  model_cache_ttl: 300
+
+# -----------------------------------------------------------------------------
+# Modell-Auswahl
+# -----------------------------------------------------------------------------
+# filter_mode: "allowlist" oder "blocklist"
+#   allowlist = NUR die unter models: gelisteten Modelle verwenden
+#   blocklist = ALLE erkannten Modelle verwenden, AUSSER die unter excluded:
+filter_mode: allowlist
+
+# Modelle gruppiert nach Tier.
+# Zwei Formate möglich:
+#
+# 1) Manuell nach Tier gruppiert (empfohlen):
+#    models:
+#      small:
+#        - modell-name
+#      medium:
+#        - modell-name
+#      large:
+#        - modell-name
+#
+# 2) Flache Liste (Tier wird automatisch nach Parameterzahl bestimmt):
+#    models:
+#      - modell-name-a
+#      - modell-name-b
+
+models:
+  small:
+    - qwen-3-4b
+    - gemma-3-4b
+    - qwen2.5-coder-7b
+  medium:
+    - gemma-3-27b
+    - Mistral-Small-3.2-24B
+    - gpt-oss20b
+  large:
+    - qwen2.5-coder-32b
+    - Qwen3-Coder-30B
+    - Qwen3-30B-A3B
+    - qwen3-next-80b-a3b
+
+# Modelle ausschließen (nur bei filter_mode: blocklist)
+# excluded:
+#   - granite-vision-3.3-2b

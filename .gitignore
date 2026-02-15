@@ -1,0 +1,10 @@
+router_config.yaml
+api.txt
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+.env
