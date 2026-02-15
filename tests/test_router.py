@@ -31,6 +31,22 @@ class TestIsCodingRequest:
         messages = [{"role": "user", "content": "I have a bug in my code"}]
         assert _is_coding_request(messages)
 
+    def test_german_coding_keywords(self):
+        messages = [{"role": "user", "content": "Implementiere einen Algorithmus für Sortierung"}]
+        assert _is_coding_request(messages)
+
+    def test_german_quellcode(self):
+        messages = [{"role": "user", "content": "Schau dir den Quellcode an"}]
+        assert _is_coding_request(messages)
+
+    def test_code_fence_detection(self):
+        messages = [{"role": "user", "content": "Fix this:\n```\nfoo()\n```"}]
+        assert _is_coding_request(messages)
+
+    def test_german_non_coding(self):
+        messages = [{"role": "user", "content": "analysiere e autos vs verbrenner"}]
+        assert not _is_coding_request(messages)
+
 
 class TestRouteRequest:
     @pytest.fixture

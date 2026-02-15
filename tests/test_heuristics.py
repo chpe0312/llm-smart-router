@@ -54,14 +54,31 @@ class TestHeuristicScoring:
         assert result.score < 0.2
 
     def test_complex_keywords_increase_score(self):
-        messages = [{"role": "user", "content": "Analyse the trade-offs and explain step by step"}]
+        messages = [{"role": "user", "content": "Explain in detail step by step how to implement this"}]
         result = score_request(messages)
-        assert any("complex" in r.lower() or "keyword" in r.lower() for r in result.reasons)
+        assert any("complex" in r.lower() for r in result.reasons)
+
+    def test_moderate_keywords_give_small_boost(self):
+        messages = [{"role": "user", "content": "Analyse the trade-offs between X and Y"}]
+        result = score_request(messages)
+        assert any("moderate" in r.lower() for r in result.reasons)
+        assert 0.1 <= result.score <= 0.5
+
+    def test_moderate_keywords_cancel_simple_penalty(self):
+        messages = [{"role": "user", "content": "Compare and list the differences"}]
+        result = score_request(messages)
+        assert not any("simple" in r.lower() for r in result.reasons)
+
+    def test_german_moderate_keywords(self):
+        messages = [{"role": "user", "content": "Analysiere E-Autos vs Verbrenner"}]
+        result = score_request(messages)
+        assert any("moderate" in r.lower() for r in result.reasons)
+        assert result.score < 0.5
 
     def test_german_complex_keywords(self):
         messages = [{"role": "user", "content": "Analysiere die Vor- und Nachteile und erkläre Schritt für Schritt"}]
         result = score_request(messages)
-        assert any("keyword" in r.lower() for r in result.reasons)
+        assert any("complex" in r.lower() for r in result.reasons)
         assert result.score >= 0.3
 
     def test_german_simple_keywords(self):
@@ -77,7 +94,26 @@ class TestHeuristicScoring:
     def test_german_complex_design_task(self):
         messages = [{"role": "user", "content": "Entwirf eine umfassende und detaillierte Architektur für eine Microservices-Plattform"}]
         result = score_request(messages)
-        assert result.score >= 0.3
+        assert result.score >= 0.5
+
+    def test_confidence_small(self):
+        messages = [{"role": "user", "content": "Was ist die Hauptstadt von Frankreich?"}]
+        result = score_request(messages)
+        assert result.confident
+        assert result.score < 0.2
+
+    def test_confidence_medium(self):
+        messages = [{"role": "user", "content": "analysiere e autos vs verbrenner, denke schritt für schritt"}]
+        result = score_request(messages)
+        assert result.confident
+        assert 0.3 <= result.score <= 0.7
+
+    def test_confidence_uncertain_in_transition(self):
+        # Score in the 0.2-0.4 transition zone should be uncertain
+        messages = [{"role": "user", "content": "implement something"}]
+        result = score_request(messages)
+        # "implement" is complex → 0.35, tokens short → 0.0, total ~0.35
+        assert not result.confident
 
     def test_empty_messages(self):
         result = score_request([])

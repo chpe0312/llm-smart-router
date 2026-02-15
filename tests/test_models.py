@@ -119,6 +119,27 @@ class TestModelRegistry:
         assert model is not None
         assert model.id == "coder"
 
+    def test_no_coder_prefers_adjacent_tier_non_coder(self):
+        registry = ModelRegistry(models={
+            "coder-large": ModelInfo(id="coder-large", total_params=32, tier=Tier.LARGE, is_coder=True),
+            "general-medium": ModelInfo(id="general-medium", total_params=24, tier=Tier.MEDIUM),
+        })
+        # prefer_coder=False, only coder in LARGE → should pick non-coder from MEDIUM
+        model = registry.get_model_for_tier(Tier.LARGE, prefer_coder=False)
+        assert model is not None
+        assert model.id == "general-medium"
+        assert not model.is_coder
+
+    def test_no_coder_falls_back_to_coder_as_last_resort(self):
+        registry = ModelRegistry(models={
+            "coder-large": ModelInfo(id="coder-large", total_params=32, tier=Tier.LARGE, is_coder=True),
+            "coder-small": ModelInfo(id="coder-small", total_params=4, tier=Tier.SMALL, is_coder=True),
+        })
+        # prefer_coder=False, only coders everywhere → last resort: coder
+        model = registry.get_model_for_tier(Tier.LARGE, prefer_coder=False)
+        assert model is not None
+        assert model.id == "coder-large"
+
     def test_empty_registry(self):
         registry = ModelRegistry()
         assert registry.get_model_for_tier(Tier.SMALL) is None

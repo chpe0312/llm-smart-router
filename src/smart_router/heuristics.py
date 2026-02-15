@@ -14,21 +14,32 @@ class HeuristicResult:
     confident: bool  # True if heuristics alone can decide the tier
 
 
-# Patterns that suggest higher complexity (English + German)
+# Patterns that suggest moderate complexity (English + German)
+MODERATE_KEYWORDS = re.compile(
+    r"\b("
+    # English
+    r"analy[sz]e|compare|contrast|explain|evaluate|discuss|review|"
+    r"trade[- ]?offs?|pros?\s+and\s+cons?|advantages?\s+and\s+disadvantages?|"
+    # German
+    r"analysiere|vergleiche|erkl[äa]re|bewerte|diskutiere|[üu]berpr[üu]fe|"
+    r"Vor-?\s*und\s+Nachteile|Abw[äa]gung|Pro\s+und\s+Contra"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Patterns that suggest high complexity (English + German)
 COMPLEX_KEYWORDS = re.compile(
     r"\b("
     # English
-    r"analy[sz]e|compare|contrast|explain\s+in\s+detail|step[- ]by[- ]step|"
+    r"explain\s+in\s+detail|step[- ]by[- ]step|"
     r"implement|architect|design|refactor|optimize|debug|"
     r"write\s+(a\s+)?(complete|full|entire)|"
     r"multi[- ]step|comprehensive|thorough|in[- ]depth|"
-    r"trade[- ]?offs?|pros?\s+and\s+cons?|advantages?\s+and\s+disadvantages?|"
     # German
-    r"analysiere|vergleiche|erkl[äa]r[e ].*im\s+detail|Schritt\s+f[üu]r\s+Schritt|"
+    r"Schritt\s+f[üu]r\s+Schritt|im\s+Detail|"
     r"implementiere|entwirf|entwerfe|optimiere|debugge|"
     r"schreib[e ].*(?:komplett|vollst[äa]ndig|ganz)|"
     r"umfassend|gr[üu]ndlich|ausf[üu]hrlich|detailliert|tiefgehend|"
-    r"Vor-?\s*und\s+Nachteile|Abw[äa]gung|Pro\s+und\s+Contra|"
     r"mehrschrittig|mehrstufig|Architektur|Konzept\s+erstell"
     r")\b",
     re.IGNORECASE,
@@ -154,20 +165,33 @@ def score_request(
 
     complex_matches = [m.group() for m in COMPLEX_KEYWORDS.finditer(last_user_text)]
     if complex_matches:
-        # Scale with number of complex keywords: 1=0.3, 2=0.45, 3+=0.6
-        keyword_score = min(0.6, 0.15 + 0.15 * len(complex_matches))
+        keyword_score = min(0.7, 0.2 + 0.15 * len(complex_matches))
         score += keyword_score
         reasons.append(f"complex keywords ({len(complex_matches)}): {', '.join(set(complex_matches[:3]))}")
 
+    moderate_matches = [m.group() for m in MODERATE_KEYWORDS.finditer(last_user_text)]
+    if moderate_matches:
+        keyword_score = min(0.2, 0.1 * len(moderate_matches))
+        score += keyword_score
+        reasons.append(f"moderate keywords ({len(moderate_matches)}): {', '.join(set(moderate_matches[:3]))}")
+
     simple_matches = [m.group() for m in SIMPLE_KEYWORDS.finditer(last_user_text)]
-    if simple_matches and not complex_matches:
+    if simple_matches and not complex_matches and not moderate_matches:
         score -= 0.15
         reasons.append(f"simple keywords: {', '.join(set(simple_matches[:3]))}")
 
     # Clamp
     score = max(0.0, min(1.0, score))
 
-    # Confidence: high/low scores are confident, middle range is uncertain
-    confident = score <= 0.2 or score >= 0.8
+    # Confidence: score clearly in one tier's range with margin from boundaries
+    from .config import get_config
+    low_thresh = get_config().heuristic_low_threshold
+    high_thresh = get_config().heuristic_high_threshold
+    margin = 0.1
+    confident = (
+        score < low_thresh - margin  # clearly SMALL
+        or (low_thresh + margin <= score <= high_thresh - margin)  # clearly MEDIUM
+        or score > high_thresh + margin  # clearly LARGE
+    )
 
     return HeuristicResult(score=round(score, 3), reasons=reasons, confident=confident)

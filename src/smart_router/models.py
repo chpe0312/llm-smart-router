@@ -75,7 +75,14 @@ class ModelRegistry:
             if general:
                 return max(general, key=lambda m: m.effective_params)
 
-        # Fallback: pick the largest model in the tier regardless
+            # No non-coder in this tier — try adjacent tiers for non-coder
+            for fallback_tier in list(Tier):
+                if fallback_tier != tier:
+                    adj_general = [m for m in self.by_tier(fallback_tier) if not m.is_coder]
+                    if adj_general:
+                        return max(adj_general, key=lambda m: m.effective_params)
+
+        # Last resort: pick the largest model in the tier regardless
         return max(candidates, key=lambda m: m.effective_params)
 
 

@@ -86,18 +86,29 @@ def _is_coding_request(messages: list[dict]) -> bool:
     code_indicators = re.compile(
         r"\b(code|function|class|implement|bug|error|exception|stacktrace|"
         r"api|endpoint|database|query|sql|html|css|javascript|python|"
-        r"typescript|rust|golang|java|refactor|test|unittest)\b",
+        r"typescript|rust|golang|java|refactor|test|unittest|"
+        # German
+        r"implementiere|debugge|Quellcode|Quelltext|Programmier|kompilier|"
+        r"Algorithmus|Algorithmen|Skript)\b",
         re.IGNORECASE,
     )
+    code_fence = re.compile(r"```")
+
     # Check last 3 user messages
     user_msgs = [m for m in messages if m.get("role") == "user"][-3:]
     for msg in user_msgs:
         content = msg.get("content", "")
-        if isinstance(content, str) and code_indicators.search(content):
-            return True
+        if isinstance(content, str):
+            if code_indicators.search(content):
+                return True
+            if code_fence.search(content):
+                return True
         if isinstance(content, list):
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text":
-                    if code_indicators.search(block.get("text", "")):
+                    text = block.get("text", "")
+                    if code_indicators.search(text):
+                        return True
+                    if code_fence.search(text):
                         return True
     return False
